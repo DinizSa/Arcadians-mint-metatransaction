@@ -22,7 +22,6 @@ export default function Contract() {
   const { chainId } = useChain();
   const { isBiconomyInitialized, biconomyProvider } = useBiconomyContext();
   const { contractName, abi } = yourCollectibleContract;
-  const [isClaimMode, setClaimMode] = useState(false);
   const [tokensBalance, setTokensBalance] = useState(0);
   const [tokens, setTokens] = useState([]); // tokens: {id, URI, metadata}
   const contractAddress = useMemo(() => yourCollectible[chainId], [chainId]);
@@ -95,37 +94,31 @@ export default function Contract() {
   };
 
   /**
-   * @description if `isClaimMode` is true, execute meta transaction,
-   * otherwise set `isClaimMode` to true
+   * @description execute meta transaction to mint
    *
    * @param {*} e
    */
   const onSubmit = async (e) => {
     await e.preventDefault();
-    if (isClaimMode) {
-      onSubmitMetaTransaction({
-        onConfirmation: () => {
-          setClaimMode(false);
-          getTokensBalance({
-            onSuccess: () => {
-              notification.success({
-                message: "Metatransaction Successful",
-                description: `You metatransaction has been successfully executed!`,
-              });
-            },
-          });
-        },
-        onError: () => {
-          notification.error({
-            message: "Metatransaction Fail",
-            description:
-              "Your metatransaction has failed. Please try again later.",
-          });
-        },
-      });
-    } else {
-      setClaimMode(true);
-    }
+    onSubmitMetaTransaction({
+      onConfirmation: () => {
+        getTokensBalance({
+          onSuccess: () => {
+            notification.success({
+              message: "Metatransaction Successful",
+              description: `You metatransaction has been successfully executed!`,
+            });
+          },
+        });
+      },
+      onError: () => {
+        notification.error({
+          message: "Metatransaction Fail",
+          description:
+            "Your metatransaction has failed. Please try again later.",
+        });
+      },
+    });
   };
 
   useEffect(() => {
@@ -139,7 +132,6 @@ export default function Contract() {
       getTokensBalance({
         onSuccess: (balance) => {
           // Reinitialize everything
-          setClaimMode(false);
           setTokensBalance(balance)
         },
       });
@@ -147,7 +139,6 @@ export default function Contract() {
   }, [isInitialized, isWeb3Enabled, contractAddress, abi, chainId]);
 
   useEffect(async () => {
-    console.log("tokensBalance updated: ", tokensBalance);
     if (isInitialized && isWeb3Enabled && tokensBalance > 0) {
       fetchTokens();
     }
@@ -242,7 +233,7 @@ export default function Contract() {
               }}
             >
               <Typography.Title style={{ margin: 0, fontSize: "23px" }}>
-                { isClaimMode ? "Mint an arcadian for free" : "Your tokens"}
+                Your tokens
               </Typography.Title>
               <Address copyable address={contractAddress} size={8} />
             </div>
@@ -270,7 +261,7 @@ export default function Contract() {
                     width: "100%",
                   }}
                 >
-                  {!isClaimMode ? (
+                  {(
                     <>
                       <Typography.Text style={{ fontSize: "25px" }}>
                         Balance: {tokensBalance}
@@ -298,8 +289,6 @@ export default function Contract() {
                       </div>
                       
                     </>
-                  ) : (
-                      null
                   )}
                 </div>
               </div>
@@ -314,35 +303,18 @@ export default function Contract() {
                 width: "100%",
               }}
             >
-              {isClaimMode && (
-                <Button
-                  
-                  size="large"
-                  shape="round"
-                  style={{ width: "100%", maxWidth: "280px" }}
-                  disabled={
-                    isBiconomyInitialized &&
-                    (isLoading || isMetatransactionProcessing)
-                  }
-                  onClick={() => {
-                    setClaimMode(false);
-                  }}
-                >
-                  See my tokens
-                </Button>
-              )}
               <Button
                 type="primary"
                 shape="round"
                 size="large"
-                htmlType={isClaimMode && "submit"}
+                htmlType={"submit"}
                 loading={
                   isBiconomyInitialized &&
                   (isLoading || isMetatransactionProcessing)
                 }
                 style={{ width: "100%", maxWidth: "280px" }}
               >
-                {isClaimMode ? "Mint" : "Main page"}
+                {"Mint" }
               </Button>
               {!isBiconomyInitialized && (
                 <Typography.Text>Loading dApp...</Typography.Text>
