@@ -5,6 +5,8 @@
   "license": "MIT",
   "dependencies": {
     "@opengsn/contracts": "^2.2.4",
+    "@openzeppelin/contracts": "^4.6.0",
+    "truffle": "^5.5.19",
     "truffle-plugin-verify": "^0.5.18"
   },
   "scripts": {
@@ -12,7 +14,8 @@
     "migrate": "truffle migrate",
     "test": "truffle test",
     "console": "truffle console",
-    "verify": "truffle run verify SimpleStorage"
+    "verify": "truffle run verify YourCollectible",
+    "clean": "truffle networks --clean"
   },
   "devDependencies": {
     "@truffle/hdwallet-provider": "^2.0.0",

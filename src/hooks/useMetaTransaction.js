@@ -1,7 +1,7 @@
 import { useState } from "react";
 import useBiconomyContext from "./useBiconomyContext";
 
-const useMetaTransaction = ({ input, transactionParams }) => {
+const useMetaTransaction = ({ transactionParams }) => {
   const { contract } = useBiconomyContext();
   const [isMetatransactionProcessing, setIsMetatransactionProcessing] =
     useState(false);
@@ -10,15 +10,14 @@ const useMetaTransaction = ({ input, transactionParams }) => {
   const onSubmitMetaTransaction = ({ onConfirmation, onError }) => {
     try {
       setIsMetatransactionProcessing(true);
-      let tx = contract.methods.setStorage(input).send(transactionParams);
+      const tx = contract.methods.mint(transactionParams.from).send(transactionParams);
 
       tx.on("transactionHash", function () {})
         .once("confirmation", function (transactionHash) {
           setIsMetatransactionProcessing(false);
           onConfirmation(transactionHash);
         })
-        .on("error", function (e) {
-          setError(e);
+        .on("error", function () {
           setIsMetatransactionProcessing(false);
           onError();
         });

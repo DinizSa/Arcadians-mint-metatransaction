@@ -1,88 +1,112 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import {
   Card,
-  Input,
   Typography,
   Skeleton,
   Button,
-  Select,
   notification,
 } from "antd";
 import { useEffect, useMemo, useState } from "react";
-import simpleStorageContract from "contracts/SimpleStorage.json";
+import yourCollectibleContract from "contracts/YourCollectible.json";
 import Address from "components/Address/Address";
 import { useMoralis, useChain } from "react-moralis";
-import simpleStorage from "list/simpleStorage.json";
+import yourCollectible from "list/yourCollectible.json";
 import { useAPIContract } from "hooks/useAPIContract";
 import useBiconomyContext from "hooks/useBiconomyContext";
 import useMetaTransaction from "hooks/useMetaTransaction";
+
+import axios from "axios"
 
 export default function Contract() {
   const { isInitialized, isWeb3Enabled, account } = useMoralis();
   const { chainId } = useChain();
   const { isBiconomyInitialized, biconomyProvider } = useBiconomyContext();
-  const { contractName, abi } = simpleStorageContract;
-  const [isEdit, setIsEdit] = useState(false);
-  const initialStorageForm = { value: "", signatureType: "" };
-  const [storageForm, setStorageForm] = useState(initialStorageForm);
-  const contractAddress = useMemo(() => simpleStorage[chainId], [chainId]);
+  const { contractName, abi } = yourCollectibleContract;
+  const [isClaimMode, setClaimMode] = useState(false);
+  const [tokensBalance, setTokensBalance] = useState(0);
+  const [tokens, setTokens] = useState([]); // tokens: {id, URI, metadata}
+  const contractAddress = useMemo(() => yourCollectible[chainId], [chainId]);
 
   /**
    * @description For getting storage data from smart contracts (params defined below);
    */
-  const { runContractFunction, contractResponse, isLoading } = useAPIContract();
+  const { runContractFunction, isLoading } = useAPIContract();
 
   /**
    * @description For executing meta transaction
    *
    * @param {String} input - New storage data
    * @param {Address} transactionParams.from - address that will sign the metatransaction
-   * @param {String} transactionParams.signatureType - either EIP712_SIGN or PERSONAL_SIGN
    */
   const { isMetatransactionProcessing, onSubmitMetaTransaction } =
     useMetaTransaction({
-      input: storageForm.value,
       transactionParams: {
         from: account,
-        signatureType: biconomyProvider[storageForm.signatureType],
+        signatureType: "EIP712_SIGN", // Signature options: PERSONAL_SIGN | EIP712_SIGN
       },
     });
-
+  
   /**
-   * @description Execute `getStorage` call from smart contract
+   * @description Execute a function in the smart contract
    *
    * @param {Function} onSuccess - success callback function
    * @param {Function} onError - error callback function
    * @param {Function} onComplete -complete callback function
    */
-  const onGetStorage = ({ onSuccess, onError, onComplete }) => {
+   const onContractCall = ({ methodName, methodParams, onSuccess, onError }) => {
     runContractFunction({
       params: {
         chain: chainId,
-        function_name: "getStorage",
+        function_name: methodName,
         abi,
         address: contractAddress,
+        params: methodParams
       },
       onSuccess,
-      onError,
-      onComplete,
+      onError
     });
   };
 
   /**
-   * @description if `isEdit` is true, execute meta transaction,
-   * otherwise set `isEdit` to true
+   * @description Execute `getTokensBalance` call from smart contract
+   * Input parameters described in `onContractCall`
+   */
+  const getTokensBalance = ({ onSuccess, onError }) => {
+    let methodParams = {owner:  account};
+    onContractCall({methodName: "balanceOf", methodParams, onSuccess, onError})
+  };
+
+  /**
+   * @description Execute `tokenOfOwnerByIndex` call from smart contract
+   * Input parameters described in `onContractCall`
+   */
+   const getTokenOfOwnerByIndex = ({ tokenIndex, onSuccess, onError }) => {
+    let methodParams = {owner:  account, index: tokenIndex};
+    onContractCall({methodName: "tokenOfOwnerByIndex", methodParams: methodParams, onSuccess, onError})
+  };
+
+  /**
+   * @description Execute `getTokensBalance` call from smart contract
+   * Input parameters described in `onContractCall`
+   */
+   const getTokenURI = ({ tokenId, onSuccess, onError }) => {
+    let methodParams = {tokenId: tokenId};
+    onContractCall({methodName: "tokenURI", methodParams: methodParams, onSuccess, onError})
+  };
+
+  /**
+   * @description if `isClaimMode` is true, execute meta transaction,
+   * otherwise set `isClaimMode` to true
    *
    * @param {*} e
    */
   const onSubmit = async (e) => {
     await e.preventDefault();
-    if (isEdit) {
+    if (isClaimMode) {
       onSubmitMetaTransaction({
         onConfirmation: () => {
-          setIsEdit(false);
-          setStorageForm(initialStorageForm);
-          onGetStorage({
+          setClaimMode(false);
+          getTokensBalance({
             onSuccess: () => {
               notification.success({
                 message: "Metatransaction Successful",
@@ -100,7 +124,7 @@ export default function Contract() {
         },
       });
     } else {
-      setIsEdit(true);
+      setClaimMode(true);
     }
   };
 
@@ -112,177 +136,221 @@ export default function Contract() {
      * - Connected Chain Changed
      */
     if (isInitialized && isWeb3Enabled) {
-      onGetStorage({
-        onSuccess: () => {
+      getTokensBalance({
+        onSuccess: (balance) => {
           // Reinitialize everything
-          setIsEdit(false);
-          setStorageForm(initialStorageForm);
+          setClaimMode(false);
+          setTokensBalance(balance)
         },
       });
     }
   }, [isInitialized, isWeb3Enabled, contractAddress, abi, chainId]);
 
+  useEffect(async () => {
+    console.log("tokensBalance updated: ", tokensBalance);
+    if (isInitialized && isWeb3Enabled && tokensBalance > 0) {
+      fetchTokens();
+    }
+  }, [tokensBalance]);
+
+  async function fetchTokens() {
+    for (let i = 0; i < tokensBalance; i++) {
+      await getTokenOfOwnerByIndex({
+        tokenIndex: String(i),
+        onSuccess: (tokenId) => {
+          if (!isTokenStored(tokenId)) {
+            getTokenURI({
+              tokenId: String(tokenId),
+              onSuccess: (tokenURI) => {
+                axios.get(tokenURI).then((resp)=>{
+                  let tokenMetadata = resp.data
+                  setTokens(oldData => [...oldData, {id: tokenId, URI: tokenURI, metadata: tokenMetadata}])
+                })
+              },
+              onError: () => {
+                notification.error({
+                  message: "Fetch of tokens failed",
+                  description:
+                    "There was an error fetching information about your tokens. Please try again later.",
+                });
+              },
+            })
+          }
+        },
+        onError: () => {
+          notification.error({
+            message: "Fetch of tokens failed",
+            description:
+              "There was an error fetching your tokens. Please try again later.",
+          });
+        },
+      })
+    }
+  }
+
+  function isTokenStored(tokenId) {
+    for (const token of tokens) {
+      if (tokenId == token.id) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   return (
-    <Card
-      size="large"
-      style={{
-        minWidth: "60vw",
-        boxShadow: "0 0.5rem 1.2rem rgb(189 197 209 / 20%)",
-        border: "1px solid #e7eaf3",
-        borderRadius: "0.5rem",
-        textAlign: "center",
-      }}
-    >
-      <form onSubmit={onSubmit}>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: "2rem",
-            padding: "2rem",
-          }}
-        >
+    <span>
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        gap: "2rem",
+        padding: "2rem",
+      }}>
+        <Typography.Title style={{ margin: 0 }}>
+          {process.env.REACT_APP_COLLECTION_NAME} collection
+        </Typography.Title>
+      </div>
+
+      <Card
+        size="large"
+        style={{
+          minWidth: "60vw",
+          boxShadow: "0 0.5rem 1.2rem rgb(189 197 209 / 20%)",
+          border: "1px solid #e7eaf3",
+          borderRadius: "0.5rem",
+          textAlign: "center",
+        }}
+      >
+        <form onSubmit={onSubmit}>
           <div
             style={{
               display: "flex",
               flexDirection: "column",
               justifyContent: "center",
               alignItems: "center",
+              gap: "2rem",
+              padding: "2rem",
             }}
           >
-            <Typography.Title style={{ margin: 0 }}>
-              {contractName}
-            </Typography.Title>
-            <Address copyable address={contractAddress} size={8} />
-          </div>
-          {!contractResponse ? (
-            <Skeleton />
-          ) : (
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "center",
                 alignItems: "center",
-                gap: "10px",
-                width: "100%",
-                maxWidth: "280px",
               }}
             >
+              <Typography.Title style={{ margin: 0, fontSize: "23px" }}>
+                { isClaimMode ? "Mint an arcadian for free" : "Your tokens"}
+              </Typography.Title>
+              <Address copyable address={contractAddress} size={8} />
+            </div>
+            {!tokensBalance > 0 ? (
+              <Skeleton />
+            ) : (
               <div
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: "10px",
-                  alignItems: "center",
                   justifyContent: "center",
+                  alignItems: "center",
+                  gap: "10px",
                   width: "100%",
+                  maxWidth: "280px",
                 }}
               >
-                {!isEdit ? (
-                  <>
-                    <Typography.Text style={{ fontSize: "16px" }}>
-                      Current Storage
-                    </Typography.Text>
-                    <Typography.Text style={{ fontSize: "25px" }}>
-                      {contractResponse}
-                    </Typography.Text>
-                  </>
-                ) : (
-                  <>
-                    <Typography.Text style={{ fontSize: "16px" }}>
-                      Enter New Storage Data
-                    </Typography.Text>
-                    <Input
-                      placeholder="New Storage Data"
-                      size="large"
-                      value={storageForm.value}
-                      disabled={isMetatransactionProcessing}
-                      onChange={(e) =>
-                        setStorageForm({
-                          ...storageForm,
-                          value: e.target.value,
-                        })
-                      }
-                      style={{ height: "40px", width: "100%" }}
-                    />
-                    <Typography.Text style={{ fontSize: "16px" }}>
-                      Choose Signature Type
-                    </Typography.Text>
-                    <Select
-                      value={storageForm.signatureType}
-                      size="large"
-                      style={{ height: "45px", width: "100%" }}
-                      disabled={isMetatransactionProcessing}
-                      onChange={(val) =>
-                        setStorageForm({ ...storageForm, signatureType: val })
-                      }
-                    >
-                      <Select.Option value="EIP712_SIGN">EIP712</Select.Option>
-                      <Select.Option value="PERSONAL_SIGN">
-                        Personal
-                      </Select.Option>
-                    </Select>
-                  </>
-                )}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "100%",
+                  }}
+                >
+                  {!isClaimMode ? (
+                    <>
+                      <Typography.Text style={{ fontSize: "25px" }}>
+                        Balance: {tokensBalance}
+                      </Typography.Text>
+                      <Typography.Text style={{ fontSize: "25px" }}>
+                        Tokens id's: {tokens.map((token, index)=> index < tokens.length-1 ? token.id + ", " : token.id)}
+                      </Typography.Text>
+
+                      <div style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        flexDirection: "row",
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}>
+                        {tokens.map((token)=>{
+                          return <img style={{
+                            display: "inline-flex",
+                            padding: "0.5%",
+                            width:"49%",
+                            height: "auto"
+                          }} 
+                          src={token.metadata.image}/>
+                        })}
+                      </div>
+                      
+                    </>
+                  ) : (
+                      null
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              alignItems: "center",
-              gap: "1rem",
-              width: "100%",
-            }}
-          >
-            {isEdit && (
+            )}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "1rem",
+                width: "100%",
+              }}
+            >
+              {isClaimMode && (
+                <Button
+                  
+                  size="large"
+                  shape="round"
+                  style={{ width: "100%", maxWidth: "280px" }}
+                  disabled={
+                    isBiconomyInitialized &&
+                    (isLoading || isMetatransactionProcessing)
+                  }
+                  onClick={() => {
+                    setClaimMode(false);
+                  }}
+                >
+                  See my tokens
+                </Button>
+              )}
               <Button
-                danger
-                size="large"
+                type="primary"
                 shape="round"
-                style={{ width: "100%", maxWidth: "280px" }}
-                disabled={
+                size="large"
+                htmlType={isClaimMode && "submit"}
+                loading={
                   isBiconomyInitialized &&
                   (isLoading || isMetatransactionProcessing)
                 }
-                onClick={() => {
-                  setStorageForm(initialStorageForm);
-                  setIsEdit(false);
-                }}
+                style={{ width: "100%", maxWidth: "280px" }}
               >
-                Cancel
+                {isClaimMode ? "Mint" : "Main page"}
               </Button>
-            )}
-            <Button
-              type="primary"
-              shape="round"
-              size="large"
-              htmlType={isEdit && "submit"}
-              loading={
-                isBiconomyInitialized &&
-                (isLoading || isMetatransactionProcessing)
-              }
-              disabled={
-                !isBiconomyInitialized ||
-                (isEdit &&
-                  (storageForm.value === "" ||
-                    storageForm.signatureType === ""))
-              }
-              style={{ width: "100%", maxWidth: "280px" }}
-            >
-              {isEdit ? "Set Storage" : "Edit Storage"}
-            </Button>
-            {!isBiconomyInitialized && (
-              <Typography.Text>Loading dApp...</Typography.Text>
-            )}
+              {!isBiconomyInitialized && (
+                <Typography.Text>Loading dApp...</Typography.Text>
+              )}
+            </div>
           </div>
-        </div>
-      </form>
-    </Card>
+        </form>
+      </Card>
+    </span>
   );
 }

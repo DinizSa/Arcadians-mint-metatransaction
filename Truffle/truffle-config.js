@@ -1,7 +1,7 @@
 const HDWalletProvider = require("@truffle/hdwallet-provider");
 const fs = require("fs");
 const mnemonic = fs.readFileSync(".secret").toString().trim();
-require("dotenv").config();
+require("dotenv")
 
 module.exports = {
   contracts_build_directory: "../src/contracts",

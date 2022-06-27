@@ -5,8 +5,8 @@ import { Biconomy } from "@biconomy/mexa";
 import Web3 from "web3";
 import { notification } from "antd";
 import { networkConfigs } from "helpers/networks";
-import simpleStorageContract from "contracts/SimpleStorage.json";
-import simpleStorage from "list/simpleStorage.json";
+import yourCollectibleContract from "contracts/YourCollectible.json";
+import yourCollectible from "list/yourCollectible.json";
 import biconomyApiKey from "helpers/biconomy";
 
 export const BiconomyContext = createContext({});
@@ -25,8 +25,8 @@ const BiconomyContextProvider = (props) => {
   const [isBiconomyInitialized, setIsBiconomyInitialized] = useState(false);
   const [biconomyProvider, setBiconomyProvider] = useState({});
   const [contract, setContract] = useState({});
-  const { abi } = simpleStorageContract;
-  const contractAddress = useMemo(() => simpleStorage[chainId], [chainId]);
+  const { abi } = yourCollectibleContract;
+  const contractAddress = useMemo(() => yourCollectible[chainId], [chainId]);
 
   useEffect(() => {
     if (isAuthenticated && !isWeb3Enabled && !isWeb3EnableLoading && chainId) {
