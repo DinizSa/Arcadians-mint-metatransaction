@@ -131,16 +131,22 @@ export default function Contract() {
     if (isInitialized && isWeb3Enabled) {
       getTokensBalance({
         onSuccess: (balance) => {
-          // Reinitialize everything
           setTokensBalance(balance)
         },
+        onError: () => {
+          setTokensBalance(0)
+        }
       });
     }
-  }, [isInitialized, isWeb3Enabled, contractAddress, abi, chainId]);
+  }, [isInitialized, isWeb3Enabled, contractAddress, abi, chainId, account]);
 
   useEffect(async () => {
-    if (isInitialized && isWeb3Enabled && tokensBalance > 0) {
-      fetchTokens();
+    if (isInitialized && isWeb3Enabled) {
+      if (tokensBalance > 0 && tokensBalance != tokens.length) {
+        fetchTokens();
+      } else {
+        setTokens([]);
+      }
     }
   }, [tokensBalance]);
 
@@ -169,6 +175,7 @@ export default function Contract() {
           }
         },
         onError: () => {
+          setTokens([]);
           notification.error({
             message: "Fetch of tokens failed",
             description:
@@ -267,7 +274,7 @@ export default function Contract() {
                         Balance: {tokensBalance}
                       </Typography.Text>
                       <Typography.Text style={{ fontSize: "25px" }}>
-                        Tokens id's: {tokens.map((token, index)=> index < tokens.length-1 ? token.id + ", " : token.id)}
+                        {/* Tokens id's: {tokens.forEach((token, index)=> index < tokens.length-1 ? token.id + ", " : token.id)} */}
                       </Typography.Text>
 
                       <div style={{
@@ -278,7 +285,8 @@ export default function Contract() {
                         alignItems: "center",
                       }}>
                         {tokens.map((token)=>{
-                          return <img style={{
+                          return <img key={token.id} style={{
+                            key:`${token.id}`,
                             display: "inline-flex",
                             padding: "0.5%",
                             width:"49%",

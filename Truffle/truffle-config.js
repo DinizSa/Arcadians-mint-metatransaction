@@ -16,9 +16,9 @@ module.exports = {
   networks: {
     develop: {
       host: "127.0.0.1",
-      port: 7545,
+      port: 8545,
       chainId: 1337,
-      network_id: 1337,
+      network_id: 31337,
     },
     ropsten: {
       provider: () =>
