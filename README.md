@@ -42,18 +42,18 @@ yarn verify {deployed_contract_address} {constructor_paramneter_01} --network {n
 Note: In order the frontend to know with which contract he should communicate, paste the newly contract address generated in the migrate step in the respective `chainId` in the file `list/yourCollectible.json`. 
 For example, for the mumbai network, the chainId is 80001, so it corresponds to the hexadecimal 0x13881. Then in the `yourCollectible.json`, the key `0x13881` will have the value as the address of the deployed contract.
 
-# Metatransaction components
+# Metatransaction components :building_construction:
 There are four components that allow the metatransaction flow
-✏ Frontend application
+:bricks: Frontend application
 Send signed metatransaction to the relay
 
-✏ Biconomy Relay
+:bricks: Biconomy Relay
 You need to setup a relay so he can receive the metatransaction, and call the trusted forwarder contract, paying for the gas of the transaction. In this project we use the (biconomy relay)[https://dashboard.biconomy.io/dapps]. To see how to setup this relay, please check the (tutorial video)[https://www.youtube.com/watch?v=r04x1YqnYLk&list=LL&index=6]. This relay needs to have funds so he can pay for the transaction.
 
-✏ Trusted Forwarder contract
+:bricks: Trusted Forwarder contract
 You don't need to deploy this contract, since biconomy deployed the TrustedForwarder contract in several networks, which you can use. See `Truffle/list/biconomyForwarder.json` to see the address of this contract in each network.
 
-✏ Recipient contract
+:bricks: Recipient contract
 This is the final contract that you want to change state with the metatransaction. There are come changes that you need to do in your contract.
   - Make your contract extend from "@opengsn/contracts/src/BaseRelayRecipient.sol"
   - Register via argument in the constructor of your contract the address of `biconomyForwarder.json`, for the desired network.
